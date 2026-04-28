@@ -79,7 +79,8 @@ class ApiService {
     return _handle(res);
   }
 
-  Future<Map<String, dynamic>> updateHabit(int id, Map<String, dynamic> payload) async {
+  Future<Map<String, dynamic>> updateHabit(
+      int id, Map<String, dynamic> payload) async {
     final res = await http.patch(
       Uri.parse('$_base/habits/$id'),
       headers: _headers,

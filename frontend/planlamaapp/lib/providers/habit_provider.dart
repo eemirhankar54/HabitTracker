@@ -11,6 +11,8 @@ class HabitModel {
   final int targetDaysPerWeek;
   final int streak;
   final int? todayLogId;
+  final int reminderHour;
+  final int reminderMinute;
 
   HabitModel({
     required this.id,
@@ -21,6 +23,8 @@ class HabitModel {
     required this.targetDaysPerWeek,
     required this.streak,
     this.todayLogId,
+    this.reminderHour = -1,
+    this.reminderMinute = 0,
   });
 
   factory HabitModel.fromJson(Map<String, dynamic> j) => HabitModel(
@@ -32,6 +36,8 @@ class HabitModel {
         targetDaysPerWeek: j['target_days_per_week'] as int? ?? 7,
         streak: j['streak'] as int? ?? 0,
         todayLogId: j['today_log_id'] as int?,
+        reminderHour: j['reminder_hour'] as int? ?? -1,
+        reminderMinute: j['reminder_minute'] as int? ?? 0,
       );
 }
 
@@ -84,7 +90,6 @@ class HabitProvider extends ChangeNotifier {
     return false;
   }
 
-// habit_provider.dart içindeki loadHabits
   Future<void> loadHabits() async {
     _setLoading(true);
     try {
@@ -92,7 +97,7 @@ class HabitProvider extends ChangeNotifier {
       _habits = data.map((j) => HabitModel.fromJson(j)).toList();
 
       // Senkronizasyon burada gerçekleşiyor:
-      _todayLogIds.clear(); // Listeyi tazele
+      _todayLogIds.clear();
       for (var habit in _habits) {
         if (habit.todayLogId != null) {
           _todayLogIds[habit.id] = habit.todayLogId!;
@@ -148,8 +153,6 @@ class HabitProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // lib/providers/habit_provider.dart
-
   Future<void> toggleHabit(int habitId) async {
     try {
       if (isCompleted(habitId)) {
@@ -169,7 +172,6 @@ class HabitProvider extends ChangeNotifier {
       await loadStats();
     }
   }
-// lib/providers/habit_provider.dart içine ekle
 
   void _setLoading(bool v) {
     _isLoading = v;

@@ -8,7 +8,9 @@ import '../../providers/habit_provider.dart';
 import '../../widgets/habit_card.dart';
 import '../add_habit/add_habit_screen.dart';
 import '../stats/stats_screen.dart';
-import '../habits/my_habits_screen.dart';
+import '../profile/profile_screen.dart';
+import '../about/about_screen.dart';
+import '../notifications/notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,13 +25,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
 
-    // Uygulama açılınca bildirim kurulumunu yap
     Future.microtask(() async {
       final auth = context.read<AuthProvider>();
-
-      // AuthProvider içinde yazdığın o izin ve token fonksiyonlarını çağırıyoruz
       await auth.requestNotificationPermissions();
       await auth.syncFCMToken();
+      await auth.fetchProfile();
+
+      if (mounted) {
+        await context.read<HabitProvider>().loadHabits();
+        await context.read<HabitProvider>().loadStats();
+      }
     });
   }
 
@@ -46,73 +51,223 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: IndexedStack(
         index: _index,
-        children: const [_HabitListPage(), StatsScreen()],
+        children: const [
+          _HabitListPage(),
+          _MyHabitsTab(),
+          StatsScreen(),
+        ],
       ),
       bottomNavigationBar: _buildNav(),
-      floatingActionButton: _index == 0 ? _buildFAB() : null,
+      floatingActionButton: _index == 1 ? _buildFAB() : null,
     );
   }
 
+  // ── DRAWER ──────────────────────────────────────────────
   Widget _buildDrawer(BuildContext context, Map<String, dynamic>? user) {
+    final username = user?['username'] ?? 'Kullanıcı';
+    final email = user?['email'] ?? 'email@example.com';
+
     return Drawer(
       backgroundColor: AppColors.background,
       child: Column(
         children: [
-          UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: AppColors.surface),
-            currentAccountPicture: CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.2),
-              child: const Text("E",
-                  style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold)),
+          // ── Profil Başlığı ──
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 24,
+              bottom: 24,
+              left: 24,
+              right: 24,
             ),
-            accountName: Text(user?['username'] ?? 'Kullanıcı',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text(user?['email'] ?? 'email@example.com',
-                style: const TextStyle(color: AppColors.textSecondary)),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withOpacity(0.15),
+                  AppColors.surface,
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      username.isNotEmpty ? username[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  username,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  email,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.check_circle_outline_rounded,
-                color: AppColors.primary),
-            title: const Text('Alışkanlıklarım'),
+
+          const SizedBox(height: 8),
+
+          // ── Menü Öğeleri ──
+          _drawerItem(
+            icon: Icons.home_rounded,
+            color: AppColors.primary,
+            label: 'Ana Sayfa',
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 0);
+            },
+          ),
+          _drawerItem(
+            icon: Icons.checklist_rounded,
+            color: AppColors.success,
+            label: AppStrings.myHabits,
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 1);
+            },
+          ),
+          _drawerItem(
+            icon: Icons.bar_chart_rounded,
+            color: AppColors.secondary,
+            label: AppStrings.statistics,
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _index = 2);
+            },
+          ),
+
+          Divider(
+            color: AppColors.surfaceVar,
+            indent: 24,
+            endIndent: 24,
+            height: 24,
+          ),
+
+          _drawerItem(
+            icon: Icons.person_rounded,
+            color: const Color(0xFFE879F9),
+            label: AppStrings.profile,
             onTap: () {
               Navigator.pop(context);
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const MyHabitsScreen()));
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()));
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.person_outline_rounded,
-                color: AppColors.secondary),
-            title: const Text('Profilim'),
-            onTap: () => Navigator.pop(context),
+          _drawerItem(
+            icon: Icons.notifications_rounded,
+            color: AppColors.warning,
+            label: AppStrings.notifications,
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen()));
+            },
           ),
-          ListTile(
-            leading: const Icon(Icons.settings_outlined,
-                color: AppColors.textSecondary),
-            title: const Text('Ayarlar'),
-            onTap: () => Navigator.pop(context),
+          _drawerItem(
+            icon: Icons.info_rounded,
+            color: AppColors.secondary,
+            label: AppStrings.about,
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()));
+            },
           ),
+
           const Spacer(),
-          const Divider(color: AppColors.surfaceVar, indent: 20, endIndent: 20),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: AppColors.accent),
-            title: const Text('Çıkış Yap',
-                style: TextStyle(
-                    color: AppColors.accent, fontWeight: FontWeight.w600)),
+
+          // ── Çıkış ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: AppColors.surfaceVar, height: 1),
+          ),
+          _drawerItem(
+            icon: Icons.logout_rounded,
+            color: AppColors.accent,
+            label: AppStrings.logout,
             onTap: () {
               context.read<AuthProvider>().logout();
               Navigator.pop(context);
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
+  Widget _drawerItem({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        leading: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        title: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        onTap: onTap,
+        hoverColor: color.withOpacity(0.05),
+        splashColor: color.withOpacity(0.1),
+      ),
+    );
+  }
+
+  // ── BOTTOM NAV ──────────────────────────────────────────
   Widget _buildNav() => Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
@@ -125,15 +280,21 @@ class _HomeScreenState extends State<HomeScreen> {
           elevation: 0,
           selectedItemColor: AppColors.primary,
           unselectedItemColor: AppColors.textSecondary,
+          type: BottomNavigationBarType.fixed,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
           items: const [
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_rounded), label: 'Ana Sayfa'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.checklist_rounded), label: 'Alışkanlıklar'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.bar_chart_rounded), label: 'İstatistik'),
           ],
         ),
       );
 
+  // ── FAB (Sadece Alışkanlıklarım sekmesinde) ──
   Widget _buildFAB() => Container(
         decoration: BoxDecoration(
           gradient: AppColors.primaryGradient,
@@ -146,8 +307,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         child: FloatingActionButton(
-          onPressed: () async => await Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const AddHabitScreen())),
+          onPressed: () async {
+            await Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AddHabitScreen()));
+            if (mounted) {
+              context.read<HabitProvider>().loadHabits();
+            }
+          },
           backgroundColor: Colors.transparent,
           elevation: 0,
           child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
@@ -155,8 +321,22 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 }
 
-class _HabitListPage extends StatelessWidget {
+// ══════════════════════════════════════════════════════════
+// ANA SAYFA TAB'I
+// ══════════════════════════════════════════════════════════
+
+class _HabitListPage extends StatefulWidget {
   const _HabitListPage();
+
+  @override
+  State<_HabitListPage> createState() => _HabitListPageState();
+}
+
+class _HabitListPageState extends State<_HabitListPage> {
+  Future<void> _refresh() async {
+    await context.read<HabitProvider>().loadHabits();
+    await context.read<HabitProvider>().loadStats();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,55 +345,90 @@ class _HabitListPage extends StatelessWidget {
     final stats = provider.stats;
 
     return SafeArea(
-      child: CustomScrollView(slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Merhaba, ${user?['username'] ?? 'Emirhan'} 👋',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 14)),
-                const Text("Hadi bugün zinciri kırma!",
-                    style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700)),
-
-                const SizedBox(height: 24),
-                _buildWeeklyCalendar(),
-
-                const SizedBox(height: 24),
-                // YENİ ROZET SATIRI
-                _buildBadgeRow(stats, provider.habits),
-
-                const SizedBox(height: 32),
-                const Text("Günün Alışkanlıkları",
-                    style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600)),
-              ],
-            ),
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
-        ),
-        if (provider.isLoading)
-          const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()))
-        else
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-              (ctx, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: HabitCard(habit: provider.habits[i]),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Merhaba, ${user?['username'] ?? 'Kullanıcı'} 👋',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 14)),
+                    const Text("Hadi bugün zinciri kırma!",
+                        style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 24),
+                    _buildWeeklyCalendar(),
+                    const SizedBox(height: 24),
+                    _buildBadgeRow(stats, provider.habits),
+                    const SizedBox(height: 32),
+                    const Text("Günün Alışkanlıkları",
+                        style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
-              childCount: provider.habits.length,
-            )),
-          ),
-      ]),
+            ),
+            if (provider.isLoading)
+              const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()))
+            else if (provider.habits.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('📭', style: TextStyle(fontSize: 48)),
+                      const SizedBox(height: 16),
+                      const Text(
+                        AppStrings.noHabits,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Alışkanlıklar sekmesinden ekle',
+                        style: TextStyle(
+                          color: AppColors.textHint,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: HabitCard(habit: provider.habits[i]),
+                  ),
+                  childCount: provider.habits.length,
+                )),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -276,14 +491,16 @@ class _HabitListPage extends StatelessWidget {
     final int total = habits.length;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Arayı açalım
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _badgeItem("💎", "$completedToday/$total", "Bugün"),
         _badgeItem(
             "⚡",
-            total > 0 ? "%${((completedToday / total) * 100).toInt()}" : "%0",
+            total > 0
+                ? "%${((completedToday / total) * 100).toInt()}"
+                : "%0",
             "Verim"),
-        _badgeItem("🏆", "Global", "Rütbe"), // Seri artık burada değil
+        _badgeItem("🏆", "Global", "Rütbe"),
       ],
     );
   }
@@ -307,9 +524,106 @@ class _HabitListPage extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.bold)),
         Text(label,
-            style:
-                const TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+            style: const TextStyle(
+                color: AppColors.textSecondary, fontSize: 10)),
       ],
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ALIŞKANLIKLARIM TAB'I
+// ══════════════════════════════════════════════════════════
+
+class _MyHabitsTab extends StatefulWidget {
+  const _MyHabitsTab();
+
+  @override
+  State<_MyHabitsTab> createState() => _MyHabitsTabState();
+}
+
+class _MyHabitsTabState extends State<_MyHabitsTab> {
+  Future<void> _refresh() async {
+    await context.read<HabitProvider>().loadHabits();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final habits = context.watch<HabitProvider>().habits;
+
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _refresh,
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        child: habits.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('📝', style: TextStyle(fontSize: 48)),
+                          SizedBox(height: 16),
+                          Text(
+                            'Henüz alışkanlık eklemedin',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '+ butonuna bas ve ilk alışkanlığını ekle!',
+                            style: TextStyle(
+                              color: AppColors.textHint,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                slivers: [
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(24, 20, 24, 16),
+                      child: Text(
+                        'Alışkanlıklarım',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (ctx, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: HabitCard(habit: habits[i]),
+                        ),
+                        childCount: habits.length,
+                      ),
+                    ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                ],
+              ),
+      ),
     );
   }
 }
