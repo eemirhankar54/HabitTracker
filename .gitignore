@@ -1,0 +1,19 @@
+# Python
+backend/venv/
+backend/.venv/
+**/__pycache__/
+*.pyc
+
+# Flutter/Android
+frontend/planlamaapp/android/app/google-services.json
+frontend/planlamaapp/build/
+frontend/planlamaapp/.dart_tool/
+frontend/planlamaapp/.flutter-plugins
+frontend/planlamaapp/.flutter-plugins-dependencies
+frontend/venv
+
+# Diğer
+.DS_Store
+.env
+
+backend/app/fire_base_service.json
